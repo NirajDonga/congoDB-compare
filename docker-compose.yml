@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7687:7687" # Bolt port
+      - "7474:7474" # HTTP port
+    environment:
+      - NEO4J_AUTH=neo4j/testpassword
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  memgraph:
+    image: memgraph/memgraph:latest
+    ports:
+      - "7688:7687" # Bolt port 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  arangodb:
+    image: arangodb:latest
+    environment:
+      - ARANGO_ROOT_PASSWORD=testpassword
+    ports:
+      - "8529:8529" # HTTP port
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    ports:
+      - "8001:8000"
+    command: start --user root --pass testpassword memory
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
