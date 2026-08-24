@@ -10,14 +10,14 @@ Comparing databases with unequal hardware (e.g., a managed free tier vs. a paid 
 
 ### Database Resource Specifications
 
-All five databases in this benchmark are capped at **0.5 vCPUs** and **256 MB of RAM**:
+All five databases in this benchmark are capped at **0.5 vCPUs** and **512 MB of RAM**:
 
 | Database | Deployment Type | vCPU Allocation | RAM Allocation | Storage Allocation |
 | :--- | :--- | :--- | :--- | :--- |
-| **CognoDB** | Managed Cloud (c0 Free Tier) | 0.5 (Burstable) | 256 MB | 1 GB |
-| **Neo4j** | Local Docker Container | 0.5 (Hard limit) | 256 MB (Hard limit) | Local Disk |
-| **Memgraph** | Local Docker Container | 0.5 (Hard limit) | 256 MB (Hard limit) | Local Disk |
-| **ArangoDB** | Local Docker Container | 0.5 (Hard limit) | 256 MB (Hard limit) | Local Disk |
-| **SurrealDB** | Local Docker Container | 0.5 (Hard limit) | 256 MB (Hard limit) | Local Disk |
+| **CognoDB** | Managed Cloud (c0 Free Tier) | 0.5 (Burstable) | 512 MB | 1 GB |
+| **Neo4j** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | Local Disk |
+| **Memgraph** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | Local Disk |
+| **ArangoDB** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | Local Disk |
+| **SurrealDB** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | Local Disk |
 
 *(Note: The strict resource capping for the local containers is enforced via `deploy.resources.limits` in the `docker-compose.yml` file).*

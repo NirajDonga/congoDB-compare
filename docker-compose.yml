@@ -12,7 +12,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 512M
 
   memgraph:
     image: memgraph/memgraph:latest
@@ -22,7 +22,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 512M
 
   arangodb:
     image: arangodb:latest
@@ -34,7 +34,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 512M
 
   surrealdb:
     image: surrealdb/surrealdb:latest
@@ -45,4 +45,4 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 512M
