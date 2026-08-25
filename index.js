@@ -30,6 +30,7 @@ async function main() {
 
     try {
         await runner.runIngest();
+        await runner.runQueries();
     } catch (error) {
         console.error('Error during benchmark:', error);
     }
