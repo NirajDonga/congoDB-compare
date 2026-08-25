@@ -34,6 +34,10 @@ class BenchmarkRunner {
             const edgesPerSec = Math.floor(edges.length / (edgesTime / 1000));
             this.results[provider.name].ingest.edgesPerSec = edgesPerSec;
             console.log(`[${provider.name}] Edges: ${edgesPerSec} / sec (${edgesTime.toFixed(2)} ms)`);
+
+            const totalLoadTime = nodesTime + edgesTime;
+            this.results[provider.name].ingest.totalLoadTimeMs = totalLoadTime;
+            console.log(`[${provider.name}] Total Load Time: ${totalLoadTime.toFixed(2)} ms`);
         }
     }
 
@@ -49,6 +53,13 @@ class BenchmarkRunner {
             console.log(`\n[${provider.name}] Starting query benchmarks...`);
             this.results[provider.name] = this.results[provider.name] || {};
             this.results[provider.name].queries = {};
+
+            // Warm-up
+            console.log(`[${provider.name}] Warming up...`);
+            for (let i = 0; i < 10; i++) {
+                await provider.traversal(sampleNodes[i].id, 1);
+                await provider.pointLookup(sampleNodes[i].id);
+            }
 
             // Traversal 1-hop
             let latencies = [];
@@ -152,6 +163,7 @@ class BenchmarkRunner {
         const summary = {};
         for (const [provider, res] of Object.entries(this.results)) {
             summary[provider] = {
+                'Total Load (ms)': res.ingest?.totalLoadTimeMs?.toFixed(0) || '-',
                 'Nodes/sec': res.ingest?.nodesPerSec || '-',
                 'Edges/sec': res.ingest?.edgesPerSec || '-',
                 '1-Hop p50/p95': `${res.queries?.traversal1Hop?.p50 || '-'}/${res.queries?.traversal1Hop?.p95 || '-'}`,

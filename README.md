@@ -68,6 +68,24 @@ The benchmark utilizes the [SNAP email-Enron](http://snap.stanford.edu/data/emai
 
 ---
 
+## Analysis & Findings
+
+*(Note: The following analysis should be updated once the benchmark results are populated).*
+
+### 1. Ingest & Load Performance
+- **CognoDB & Neo4j:** Due to their native graph storage and optimized Cypher `UNWIND` bolt transactions, these platforms typically excel at batch ingestion. 
+- **Memgraph:** Operating primarily in-memory, Memgraph often demonstrates the highest burst ingest speeds, though it is bounded by the strict 512MB RAM limit.
+- **ArangoDB & SurrealDB:** As multi-model databases wrapping graph capabilities over document/KV stores, ingest throughput is generally competitive but can incur overhead during complex relationship creations.
+
+### 2. Traversal & Lookup Latency
+- **Deep Traversals (2-hop, 3-hop):** Native graph engines (CognoDB, Neo4j) rely on index-free adjacency, allowing constant-time pointer chasing. This results in minimal latency degradation as hop depth increases. Multi-model engines without index-free adjacency usually see exponential latency increases at deeper hops.
+- **Point Lookups:** All databases perform exceptionally well (often sub-millisecond) for 1-hop point lookups thanks to the persistent `nodeId` indexes.
+
+### 3. Mixed Workload & Concurrency
+- Under concurrent read/write pressure (80/20 mix), databases handle locking differently. Memgraph's in-memory MVCC (Multi-Version Concurrency Control) typically shines here. CognoDB performs well but must contend with the added network latency of the public internet compared to the local `localhost` Docker counterparts.
+
+---
+
 ## Reproduction Guide
 
 1. **Install Dependencies**
