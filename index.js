@@ -22,6 +22,18 @@ async function main() {
         }
     }
 
+    // Run benchmarks
+    const DataLoader = require('./src/core/DataLoader');
+    const BenchmarkRunner = require('./src/core/BenchmarkRunner');
+    const loader = new DataLoader('./data/nodes.json', './data/edges.json');
+    const runner = new BenchmarkRunner(providers, loader);
+
+    try {
+        await runner.runIngest();
+    } catch (error) {
+        console.error('Error during benchmark:', error);
+    }
+
     for (const provider of providers) {
         try {
             await provider.disconnect();
