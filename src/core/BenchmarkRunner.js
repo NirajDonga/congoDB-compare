@@ -106,6 +106,47 @@ class BenchmarkRunner {
         }
     }
 
+    async runMixedWorkload(concurrency = 10, writeRatio = 0.2, durationSeconds = 10) {
+        console.log(`\n--- MIXED WORKLOAD BENCHMARK (${concurrency} clients, ${100 - writeRatio * 100}% read / ${writeRatio * 100}% write) ---`);
+        const { nodes } = this.dataLoader.load();
+
+        for (const provider of this.providers) {
+            console.log(`\n[${provider.name}] Starting mixed workload...`);
+            this.results[provider.name].mixed = {};
+
+            let queryCount = 0;
+            const endTime = Date.now() + (durationSeconds * 1000);
+
+            const worker = async () => {
+                while (Date.now() < endTime) {
+                    try {
+                        const isWrite = Math.random() < writeRatio;
+                        if (isWrite) {
+                            const randomNode = { id: `new_node_${Math.floor(Math.random() * 1000000)}` };
+                            await provider.writeNode(randomNode);
+                        } else {
+                            const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
+                            await provider.pointLookup(randomNode.id);
+                        }
+                        queryCount++;
+                    } catch (err) {
+                        // Ignore individual query failures in mixed workload to keep hammering
+                    }
+                }
+            };
+
+            const workers = [];
+            for (let i = 0; i < concurrency; i++) {
+                workers.push(worker());
+            }
+
+            await Promise.all(workers);
+            const queriesPerSec = Math.floor(queryCount / durationSeconds);
+            this.results[provider.name].mixed.queriesPerSec = queriesPerSec;
+            console.log(`[${provider.name}] Sustained throughput: ${queriesPerSec} queries/sec`);
+        }
+    }
+
     outputResults() {
         console.log('\n--- BENCHMARK SUMMARY ---');
         const summary = {};
@@ -113,12 +154,13 @@ class BenchmarkRunner {
             summary[provider] = {
                 'Nodes/sec': res.ingest?.nodesPerSec || '-',
                 'Edges/sec': res.ingest?.edgesPerSec || '-',
-                '1-Hop p50 (ms)': res.queries?.traversal1Hop?.p50 || '-',
-                '2-Hop p50 (ms)': res.queries?.traversal2Hop?.p50 || '-',
-                '3-Hop p50 (ms)': res.queries?.traversal3Hop?.p50 || '-',
-                'Point Lookup p50 (ms)': res.queries?.pointLookup?.p50 || '-',
-                'Indexed Lookup p50 (ms)': res.queries?.indexedLookup?.p50 || '-',
-                'Aggregation p50 (ms)': res.queries?.aggregation?.p50 || '-'
+                '1-Hop p50/p95': `${res.queries?.traversal1Hop?.p50 || '-'}/${res.queries?.traversal1Hop?.p95 || '-'}`,
+                '2-Hop p50/p95': `${res.queries?.traversal2Hop?.p50 || '-'}/${res.queries?.traversal2Hop?.p95 || '-'}`,
+                '3-Hop p50/p95': `${res.queries?.traversal3Hop?.p50 || '-'}/${res.queries?.traversal3Hop?.p95 || '-'}`,
+                'Pt Lookup p50/p95': `${res.queries?.pointLookup?.p50 || '-'}/${res.queries?.pointLookup?.p95 || '-'}`,
+                'Idx Lookup p50/p95': `${res.queries?.indexedLookup?.p50 || '-'}/${res.queries?.indexedLookup?.p95 || '-'}`,
+                'Aggr p50/p95': `${res.queries?.aggregation?.p50 || '-'}/${res.queries?.aggregation?.p95 || '-'}`,
+                'Mixed Q/sec': res.mixed?.queriesPerSec || '-'
             };
         }
         console.table(summary);

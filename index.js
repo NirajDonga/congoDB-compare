@@ -31,6 +31,7 @@ async function main() {
     try {
         await runner.runIngest();
         await runner.runQueries();
+        await runner.runMixedWorkload();
         runner.outputResults();
     } catch (error) {
         console.error('Error during benchmark:', error);
