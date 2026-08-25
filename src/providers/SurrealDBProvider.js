@@ -32,6 +32,41 @@ class SurrealDBProvider extends BaseDatabase {
             console.log(`[${this.name}] Disconnected.`);
         }
     }
+
+    async clearData() {
+        await this.db.query('REMOVE TABLE IF EXISTS person');
+        await this.db.query('REMOVE TABLE IF EXISTS knows');
+    }
+
+    async createIndexes() {
+        await this.db.query('DEFINE INDEX IF NOT EXISTS person_nodeId ON TABLE person COLUMNS nodeId');
+    }
+
+    async loadNodes(nodes, batchSize = BaseDatabase.DEFAULT_BATCH_SIZE) {
+        let loaded = 0;
+        for (let i = 0; i < nodes.length; i += batchSize) {
+            const batch = nodes.slice(i, i + batchSize).map(n => ({
+                id: n.id,       // becomes record ID person:<id>
+                nodeId: n.id,   // indexed property for lookups
+            }));
+            await this.db.insert('person', batch);
+            loaded += batch.length;
+        }
+        return loaded;
+    }
+
+    async loadEdges(edges, batchSize = 500) {
+        let loaded = 0;
+        for (let i = 0; i < edges.length; i += batchSize) {
+            const batch = edges.slice(i, i + batchSize);
+            const statements = batch
+                .map(e => `RELATE person:${e.from}->knows->person:${e.to}`)
+                .join('; ');
+            await this.db.query(statements);
+            loaded += batch.length;
+        }
+        return loaded;
+    }
 }
 
 module.exports = SurrealDBProvider;

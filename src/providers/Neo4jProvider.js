@@ -27,6 +27,48 @@ class Neo4jProvider extends BaseDatabase {
             console.log(`[${this.name}] Disconnected.`);
         }
     }
+
+    async run(cypher, params = {}) {
+        const session = this.driver.session();
+        try {
+            return await session.run(cypher, params);
+        } finally {
+            await session.close();
+        }
+    }
+
+    async clearData() {
+        await this.run('MATCH (n) DETACH DELETE n');
+    }
+
+    async createIndexes() {
+        await this.run('CREATE INDEX IF NOT EXISTS FOR (n:Person) ON (n.id)');
+    }
+
+    async loadNodes(nodes, batchSize = BaseDatabase.DEFAULT_BATCH_SIZE) {
+        let loaded = 0;
+        for (let i = 0; i < nodes.length; i += batchSize) {
+            const batch = nodes.slice(i, i + batchSize);
+            await this.run('UNWIND $batch AS row CREATE (n:Person {id: row.id})', { batch });
+            loaded += batch.length;
+        }
+        return loaded;
+    }
+
+    async loadEdges(edges, batchSize = BaseDatabase.DEFAULT_BATCH_SIZE) {
+        let loaded = 0;
+        for (let i = 0; i < edges.length; i += batchSize) {
+            const batch = edges.slice(i, i + batchSize);
+            await this.run(
+                `UNWIND $batch AS row
+                 MATCH (a:Person {id: row.from}), (b:Person {id: row.to})
+                 CREATE (a)-[:KNOWS]->(b)`,
+                { batch }
+            );
+            loaded += batch.length;
+        }
+        return loaded;
+    }
 }
 
 module.exports = Neo4jProvider;
