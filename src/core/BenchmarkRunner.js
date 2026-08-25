@@ -2,6 +2,15 @@ const Timer = require('./Timer');
 const Stats = require('./Stats');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+
+// Map provider names to docker-compose service names for footprint collection
+const DOCKER_SERVICE_MAP = {
+    'Neo4j': 'neo4j',
+    'Memgraph': 'memgraph',
+    'ArangoDB': 'arangodb',
+    'SurrealDB': 'surrealdb',
+};
 
 class BenchmarkRunner {
     constructor(providers, dataLoader) {
@@ -54,11 +63,21 @@ class BenchmarkRunner {
             this.results[provider.name] = this.results[provider.name] || {};
             this.results[provider.name].queries = {};
 
+            // Cold-start measurement (before any warm-up)
+            console.log(`[${provider.name}] Measuring cold-start latencies...`);
+            let coldLatencies = [];
+            for (let i = 0; i < 10; i++) {
+                const { latencyMs } = await Timer.measure(() => provider.traversal(sampleNodes[i].id, 1));
+                coldLatencies.push(latencyMs);
+            }
+            this.results[provider.name].queries.coldStart1Hop = Stats.compute(coldLatencies);
+            console.log(`[${provider.name}] Cold 1-hop: p50 ${this.results[provider.name].queries.coldStart1Hop.p50}ms, p95 ${this.results[provider.name].queries.coldStart1Hop.p95}ms`);
+
             // Warm-up
             console.log(`[${provider.name}] Warming up...`);
-            for (let i = 0; i < 10; i++) {
-                await provider.traversal(sampleNodes[i].id, 1);
-                await provider.pointLookup(sampleNodes[i].id);
+            for (let i = 0; i < 20; i++) {
+                await provider.traversal(sampleNodes[i % sampleNodes.length].id, 1);
+                await provider.pointLookup(sampleNodes[i % sampleNodes.length].id);
             }
 
             // Traversal 1-hop
@@ -106,55 +125,99 @@ class BenchmarkRunner {
             this.results[provider.name].queries.indexedLookup = Stats.compute(latencies);
             console.log(`[${provider.name}] Indexed Lookup: p50 ${this.results[provider.name].queries.indexedLookup.p50}ms`);
 
-            // Aggregation (fewer runs since it touches whole graph)
+            // Aggregation
             latencies = [];
-            for (let i = 0; i < Math.min(runs, 10); i++) {
+            for (let i = 0; i < runs; i++) {
                 const { latencyMs } = await Timer.measure(() => provider.aggregation());
                 latencies.push(latencyMs);
             }
             this.results[provider.name].queries.aggregation = Stats.compute(latencies);
-            console.log(`[${provider.name}] Aggregation: p50 ${this.results[provider.name].queries.aggregation.p50}ms`);
+            console.log(`[${provider.name}] Aggregation: p50 ${this.results[provider.name].queries.aggregation.p50}ms, p95 ${this.results[provider.name].queries.aggregation.p95}ms`);
         }
     }
 
-    async runMixedWorkload(concurrency = 10, writeRatio = 0.2, durationSeconds = 10) {
-        console.log(`\n--- MIXED WORKLOAD BENCHMARK (${concurrency} clients, ${100 - writeRatio * 100}% read / ${writeRatio * 100}% write) ---`);
+    async runMixedWorkload(concurrencyLevels = [1, 10, 40], writeRatio = 0.2, durationSeconds = 10) {
+        console.log(`\n--- MIXED WORKLOAD BENCHMARK (${concurrencyLevels.join('/')} clients, ${100 - writeRatio * 100}% read / ${writeRatio * 100}% write, ${durationSeconds}s per level) ---`);
         const { nodes } = this.dataLoader.load();
 
         for (const provider of this.providers) {
-            console.log(`\n[${provider.name}] Starting mixed workload...`);
             this.results[provider.name].mixed = {};
 
-            let queryCount = 0;
-            const endTime = Date.now() + (durationSeconds * 1000);
+            for (const concurrency of concurrencyLevels) {
+                console.log(`\n[${provider.name}] Mixed workload @ ${concurrency} clients...`);
 
-            const worker = async () => {
-                while (Date.now() < endTime) {
-                    try {
-                        const isWrite = Math.random() < writeRatio;
-                        if (isWrite) {
-                            const randomNode = { id: `new_node_${Math.floor(Math.random() * 1000000)}` };
-                            await provider.writeNode(randomNode);
-                        } else {
-                            const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
-                            await provider.pointLookup(randomNode.id);
+                let queryCount = 0;
+                const endTime = Date.now() + (durationSeconds * 1000);
+
+                const worker = async () => {
+                    while (Date.now() < endTime) {
+                        try {
+                            const isWrite = Math.random() < writeRatio;
+                            if (isWrite) {
+                                const randomNode = { id: `new_node_${Math.floor(Math.random() * 1000000)}` };
+                                await provider.writeNode(randomNode);
+                            } else {
+                                const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
+                                await provider.pointLookup(randomNode.id);
+                            }
+                            queryCount++;
+                        } catch (err) {
+                            // Ignore individual query failures in mixed workload to keep hammering
                         }
-                        queryCount++;
-                    } catch (err) {
-                        // Ignore individual query failures in mixed workload to keep hammering
                     }
-                }
-            };
+                };
 
-            const workers = [];
-            for (let i = 0; i < concurrency; i++) {
-                workers.push(worker());
+                const workers = [];
+                for (let i = 0; i < concurrency; i++) {
+                    workers.push(worker());
+                }
+
+                await Promise.all(workers);
+                const queriesPerSec = Math.floor(queryCount / durationSeconds);
+                this.results[provider.name].mixed[`concurrency_${concurrency}`] = queriesPerSec;
+                console.log(`[${provider.name}] @ ${concurrency} clients: ${queriesPerSec} queries/sec`);
+            }
+        }
+    }
+
+    async runFootprint() {
+        console.log('\n--- RESOURCE FOOTPRINT ---');
+
+        for (const provider of this.providers) {
+            this.results[provider.name].footprint = {};
+            const serviceName = DOCKER_SERVICE_MAP[provider.name];
+
+            if (!serviceName) {
+                // Managed cloud (CognoDB) — not observable locally
+                this.results[provider.name].footprint.memory = 'N/A (Managed)';
+                this.results[provider.name].footprint.storage = 'N/A (Managed)';
+                console.log(`[${provider.name}] Footprint: N/A (Managed cloud)`);
+                continue;
             }
 
-            await Promise.all(workers);
-            const queriesPerSec = Math.floor(queryCount / durationSeconds);
-            this.results[provider.name].mixed.queriesPerSec = queriesPerSec;
-            console.log(`[${provider.name}] Sustained throughput: ${queriesPerSec} queries/sec`);
+            try {
+                // Get memory usage via docker stats
+                const statsOutput = execSync(
+                    `docker stats --no-stream --format "{{.MemUsage}}" $(docker compose ps -q ${serviceName})`,
+                    { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8', timeout: 10000 }
+                ).trim();
+                this.results[provider.name].footprint.memory = statsOutput || 'N/A';
+
+                // Get container disk usage
+                const sizeOutput = execSync(
+                    `docker inspect --format="{{.SizeRw}}" $(docker compose ps -q ${serviceName})`,
+                    { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8', timeout: 10000 }
+                ).trim();
+                const sizeBytes = parseInt(sizeOutput, 10);
+                const sizeMB = isNaN(sizeBytes) ? 'N/A' : `${(sizeBytes / 1024 / 1024).toFixed(2)} MB`;
+                this.results[provider.name].footprint.storage = sizeMB;
+
+                console.log(`[${provider.name}] Memory: ${statsOutput} | Storage: ${sizeMB}`);
+            } catch (err) {
+                this.results[provider.name].footprint.memory = 'Error';
+                this.results[provider.name].footprint.storage = 'Error';
+                console.warn(`[${provider.name}] Could not collect footprint: ${err.message}`);
+            }
         }
     }
 
@@ -172,7 +235,12 @@ class BenchmarkRunner {
                 'Pt Lookup p50/p95': `${res.queries?.pointLookup?.p50 || '-'}/${res.queries?.pointLookup?.p95 || '-'}`,
                 'Idx Lookup p50/p95': `${res.queries?.indexedLookup?.p50 || '-'}/${res.queries?.indexedLookup?.p95 || '-'}`,
                 'Aggr p50/p95': `${res.queries?.aggregation?.p50 || '-'}/${res.queries?.aggregation?.p95 || '-'}`,
-                'Mixed Q/sec': res.mixed?.queriesPerSec || '-'
+                'Mixed 1c Q/s': res.mixed?.concurrency_1 || '-',
+                'Mixed 10c Q/s': res.mixed?.concurrency_10 || '-',
+                'Mixed 40c Q/s': res.mixed?.concurrency_40 || '-',
+                'Cold 1-Hop p50': res.queries?.coldStart1Hop?.p50 || '-',
+                'Memory': res.footprint?.memory || '-',
+                'Storage': res.footprint?.storage || '-',
             };
         }
         console.table(summary);

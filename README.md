@@ -10,13 +10,13 @@ To ensure a fair evaluation, all databases operate under identical resource cons
 
 All databases are capped at **0.5 vCPUs** and **512 MB RAM**.
 
-| Database | Deployment Model | vCPU Allocation | RAM Allocation |
-| :--- | :--- | :--- | :--- |
-| **CognoDB** | Managed Cloud (c0 Free Tier) | 0.5 (Burstable) | 512 MB |
-| **Neo4j** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) |
-| **Memgraph** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) |
-| **ArangoDB** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) |
-| **SurrealDB** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) |
+| Database | Deployment Model | vCPU Allocation | RAM Allocation | Storage |
+| :--- | :--- | :--- | :--- | :--- |
+| **CognoDB** | Managed Cloud (c0 Free Tier) | 0.5 (Burstable) | 512 MB | 1 GB |
+| **Neo4j** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | 1 GB |
+| **Memgraph** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | 1 GB |
+| **ArangoDB** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | 1 GB |
+| **SurrealDB** | Local Docker Container | 0.5 (Hard limit) | 512 MB (Hard limit) | 1 GB |
 
 ---
 

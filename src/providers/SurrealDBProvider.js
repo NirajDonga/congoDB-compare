@@ -60,7 +60,11 @@ class SurrealDBProvider extends BaseDatabase {
         for (let i = 0; i < edges.length; i += batchSize) {
             const batch = edges.slice(i, i + batchSize);
             const statements = batch
-                .map(e => `RELATE person:${e.from}->knows->person:${e.to}`)
+                .map(e => {
+                    const from = String(e.from).replace(/[^a-zA-Z0-9_]/g, '_');
+                    const to = String(e.to).replace(/[^a-zA-Z0-9_]/g, '_');
+                    return `RELATE person:${from}->knows->person:${to}`;
+                })
                 .join('; ');
             await this.db.query(statements);
             loaded += batch.length;
