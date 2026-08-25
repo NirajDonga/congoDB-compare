@@ -14,19 +14,26 @@ async function main() {
         new ArangoDBProvider(process.env.ARANGODB_URI, process.env.ARANGODB_USER, process.env.ARANGODB_PASSWORD),
         new SurrealDBProvider(process.env.SURREALDB_URI, process.env.SURREALDB_USER, process.env.SURREALDB_PASSWORD)
     ];
+    const connectedProviders = [];
     for (const provider of providers) {
         try {
             await provider.connect();
+            connectedProviders.push(provider);
         } catch (error) {
             console.error(`Failed to connect to ${provider.name}. Check your credentials and ensure Docker is running.`);
         }
+    }
+
+    if (connectedProviders.length === 0) {
+        console.error("No databases connected. Exiting.");
+        return;
     }
 
     // Run benchmarks
     const DataLoader = require('./src/core/DataLoader');
     const BenchmarkRunner = require('./src/core/BenchmarkRunner');
     const loader = new DataLoader('./data/nodes.json', './data/edges.json');
-    const runner = new BenchmarkRunner(providers, loader);
+    const runner = new BenchmarkRunner(connectedProviders, loader);
 
     try {
         await runner.runIngest();
