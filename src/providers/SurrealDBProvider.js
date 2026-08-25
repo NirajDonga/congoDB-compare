@@ -67,6 +67,33 @@ class SurrealDBProvider extends BaseDatabase {
         }
         return loaded;
     }
+
+    async traversal(startNodeId, hops) {
+        const path = Array(hops).fill('->knows->person').join('');
+        const query = `SELECT ${path}.nodeId AS nodes FROM person:${startNodeId}`;
+        const [res] = await this.db.query(query);
+        const nodes = res?.result?.[0]?.nodes || [];
+        return [...new Set(nodes.flat(Infinity))];
+    }
+
+    async pointLookup(nodeId) {
+        const [res] = await this.db.query('SELECT * FROM type::thing("person", $id)', { id: nodeId });
+        return res?.result?.[0] || null;
+    }
+
+    async indexedLookup(property, value) {
+        const [res] = await this.db.query(`SELECT * FROM person WHERE ${property} = $value`, { value });
+        return res?.result || [];
+    }
+
+    async aggregation() {
+        const [res] = await this.db.query('SELECT count() AS count FROM knows GROUP BY ALL');
+        return [{ key: 'KNOWS', count: res?.result?.[0]?.count || 0 }];
+    }
+
+    async writeNode(node) {
+        await this.db.insert('person', { id: node.id, nodeId: node.id });
+    }
 }
 
 module.exports = SurrealDBProvider;

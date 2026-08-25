@@ -69,6 +69,35 @@ class MemgraphProvider extends BaseDatabase {
         }
         return loaded;
     }
+
+    async traversal(startNodeId, hops) {
+        const query = `MATCH (n:Person {id: $id})-[:KNOWS*${hops}..${hops}]->(m:Person) RETURN DISTINCT m.id AS id`;
+        const result = await this.run(query, { id: startNodeId });
+        return result.records.map(r => r.get('id'));
+    }
+
+    async pointLookup(nodeId) {
+        const result = await this.run('MATCH (n:Person {id: $id}) RETURN n', { id: nodeId });
+        return result.records.length > 0 ? result.records[0].get('n').properties : null;
+    }
+
+    async indexedLookup(property, value) {
+        const query = `MATCH (n:Person) WHERE n.${property} = $value RETURN n`;
+        const result = await this.run(query, { value });
+        return result.records.map(r => r.get('n').properties);
+    }
+
+    async aggregation() {
+        const result = await this.run('MATCH ()-[r:KNOWS]->() RETURN type(r) AS key, count(r) AS count');
+        return result.records.map(r => ({
+            key: r.get('key'),
+            count: r.get('count').toNumber ? r.get('count').toNumber() : Number(r.get('count'))
+        }));
+    }
+
+    async writeNode(node) {
+        await this.run('CREATE (n:Person {id: $id})', { id: node.id });
+    }
 }
 
 module.exports = MemgraphProvider;

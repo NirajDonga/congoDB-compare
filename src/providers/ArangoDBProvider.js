@@ -74,6 +74,54 @@ class ArangoDBProvider extends BaseDatabase {
         }
         return loaded;
     }
+
+    async traversal(startNodeId, hops) {
+        const query = `
+            FOR v IN ${hops}..${hops} OUTBOUND 'persons/${startNodeId}' knows
+            RETURN DISTINCT v.nodeId
+        `;
+        const cursor = await this.db.query(query);
+        return await cursor.all();
+    }
+
+    async pointLookup(nodeId) {
+        const query = `
+            FOR p IN persons
+            FILTER p.nodeId == @nodeId
+            LIMIT 1
+            RETURN p
+        `;
+        const cursor = await this.db.query(query, { nodeId });
+        const result = await cursor.all();
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async indexedLookup(property, value) {
+        const query = `
+            FOR p IN persons
+            FILTER p.${property} == @value
+            RETURN p
+        `;
+        const cursor = await this.db.query(query, { value });
+        return await cursor.all();
+    }
+
+    async aggregation() {
+        const query = `
+            FOR e IN knows
+            COLLECT type = 'KNOWS' WITH COUNT INTO count
+            RETURN { key: type, count: count }
+        `;
+        const cursor = await this.db.query(query);
+        return await cursor.all();
+    }
+
+    async writeNode(node) {
+        const query = `
+            INSERT { _key: TO_STRING(@id), nodeId: @id } INTO persons
+        `;
+        await this.db.query(query, { id: node.id });
+    }
 }
 
 module.exports = ArangoDBProvider;
