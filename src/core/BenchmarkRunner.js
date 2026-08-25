@@ -1,5 +1,7 @@
 const Timer = require('./Timer');
 const Stats = require('./Stats');
+const fs = require('fs');
+const path = require('path');
 
 class BenchmarkRunner {
     constructor(providers, dataLoader) {
@@ -102,6 +104,33 @@ class BenchmarkRunner {
             this.results[provider.name].queries.aggregation = Stats.compute(latencies);
             console.log(`[${provider.name}] Aggregation: p50 ${this.results[provider.name].queries.aggregation.p50}ms`);
         }
+    }
+
+    outputResults() {
+        console.log('\n--- BENCHMARK SUMMARY ---');
+        const summary = {};
+        for (const [provider, res] of Object.entries(this.results)) {
+            summary[provider] = {
+                'Nodes/sec': res.ingest?.nodesPerSec || '-',
+                'Edges/sec': res.ingest?.edgesPerSec || '-',
+                '1-Hop p50 (ms)': res.queries?.traversal1Hop?.p50 || '-',
+                '2-Hop p50 (ms)': res.queries?.traversal2Hop?.p50 || '-',
+                '3-Hop p50 (ms)': res.queries?.traversal3Hop?.p50 || '-',
+                'Point Lookup p50 (ms)': res.queries?.pointLookup?.p50 || '-',
+                'Indexed Lookup p50 (ms)': res.queries?.indexedLookup?.p50 || '-',
+                'Aggregation p50 (ms)': res.queries?.aggregation?.p50 || '-'
+            };
+        }
+        console.table(summary);
+
+        const resultsDir = path.join(__dirname, '..', '..', 'results');
+        if (!fs.existsSync(resultsDir)) {
+            fs.mkdirSync(resultsDir, { recursive: true });
+        }
+        
+        const resultsFile = path.join(resultsDir, 'benchmark_results.json');
+        fs.writeFileSync(resultsFile, JSON.stringify(this.results, null, 2), 'utf-8');
+        console.log(`\nDetailed results saved to ${resultsFile}\n`);
     }
 }
 
