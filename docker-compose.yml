@@ -31,11 +31,14 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  surrealdb:
-    image: surrealdb/surrealdb:latest
+  age:
+    image: apache/age:latest
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=testpassword
+      - POSTGRES_DB=postgres
     ports:
-      - "8001:8000"
-    command: start --user root --pass testpassword memory
+      - "5432:5432"
     deploy:
       resources:
         limits:

@@ -15,6 +15,6 @@
     "dotenv": "^17.4.2",
     "falkordb": "^6.8.0",
     "neo4j-driver": "^6.2.0",
-    "surrealdb": "^2.0.8"
+    "pg": "^8.23.0"
   }
 }

@@ -4,15 +4,19 @@ const CognoDBProvider = require('./src/providers/CognoDBProvider');
 const FalkorDBProvider = require('./src/providers/FalkorDBProvider');
 const MemgraphProvider = require('./src/providers/MemgraphProvider');
 const ArangoDBProvider = require('./src/providers/ArangoDBProvider');
-const SurrealDBProvider = require('./src/providers/SurrealDBProvider');
+const AgeProvider = require('./src/providers/AgeProvider');
+const DataLoader = require('./src/core/DataLoader');
+const BenchmarkRunner = require('./src/core/BenchmarkRunner');
 
 async function main() {
+    console.log("=== Starting Graph Database Benchmark ===");
+
     const providers = [
         new CognoDBProvider(process.env.COGNODB_URI, process.env.COGNODB_USER, process.env.COGNODB_PASSWORD),
         new FalkorDBProvider(process.env.FALKORDB_URI),
         new MemgraphProvider(process.env.MEMGRAPH_URI, process.env.MEMGRAPH_USER, process.env.MEMGRAPH_PASSWORD),
-        new ArangoDBProvider(process.env.ARANGODB_URI, process.env.ARANGODB_USER, process.env.ARANGODB_PASSWORD),
-        new SurrealDBProvider(process.env.SURREALDB_URI, process.env.SURREALDB_USER, process.env.SURREALDB_PASSWORD)
+        new ArangoDBProvider(process.env.ARANGODB_URI, process.env.ARANGODB_USER, process.env.ARANGODB_PASSWORD, process.env.ARANGODB_DB),
+        new AgeProvider(process.env.AGE_URI)
     ];
     const connectedProviders = [];
     for (const provider of providers) {

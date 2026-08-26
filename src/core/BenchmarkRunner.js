@@ -6,10 +6,11 @@ const { execSync } = require('child_process');
 
 // Map provider names to docker-compose service names for footprint collection
 const DOCKER_SERVICE_MAP = {
+    'CognoDB': 'cognodb',
     'FalkorDB': 'falkordb',
     'Memgraph': 'memgraph',
     'ArangoDB': 'arangodb',
-    'SurrealDB': 'surrealdb',
+    'ApacheAGE': 'age'
 };
 
 class BenchmarkRunner {
