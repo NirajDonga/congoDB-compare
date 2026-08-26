@@ -6,7 +6,7 @@ const { execSync } = require('child_process');
 
 // Map provider names to docker-compose service names for footprint collection
 const DOCKER_SERVICE_MAP = {
-    'Neo4j': 'neo4j',
+    'FalkorDB': 'falkordb',
     'Memgraph': 'memgraph',
     'ArangoDB': 'arangodb',
     'SurrealDB': 'surrealdb',
@@ -27,26 +27,31 @@ class BenchmarkRunner {
             console.log(`\n[${provider.name}] Starting ingest benchmark...`);
             this.results[provider.name] = { ingest: {} };
 
-            await provider.clearData();
-            await provider.createIndexes();
+            try {
+                await provider.clearData();
+                await provider.createIndexes();
 
-            const { latencyMs: nodesTime } = await Timer.measure(async () => {
-                await provider.loadNodes(nodes);
-            });
-            const nodesPerSec = Math.floor(nodes.length / (nodesTime / 1000));
-            this.results[provider.name].ingest.nodesPerSec = nodesPerSec;
-            console.log(`[${provider.name}] Nodes: ${nodesPerSec} / sec (${nodesTime.toFixed(2)} ms)`);
+                const { latencyMs: nodesTime } = await Timer.measure(async () => {
+                    await provider.loadNodes(nodes);
+                });
+                const nodesPerSec = Math.floor(nodes.length / (nodesTime / 1000));
+                this.results[provider.name].ingest.nodesPerSec = nodesPerSec;
+                console.log(`[${provider.name}] Nodes: ${nodesPerSec} / sec (${nodesTime.toFixed(2)} ms)`);
 
-            const { latencyMs: edgesTime } = await Timer.measure(async () => {
-                await provider.loadEdges(edges);
-            });
-            const edgesPerSec = Math.floor(edges.length / (edgesTime / 1000));
-            this.results[provider.name].ingest.edgesPerSec = edgesPerSec;
-            console.log(`[${provider.name}] Edges: ${edgesPerSec} / sec (${edgesTime.toFixed(2)} ms)`);
+                const { latencyMs: edgesTime } = await Timer.measure(async () => {
+                    await provider.loadEdges(edges);
+                });
+                const edgesPerSec = Math.floor(edges.length / (edgesTime / 1000));
+                this.results[provider.name].ingest.edgesPerSec = edgesPerSec;
+                console.log(`[${provider.name}] Edges: ${edgesPerSec} / sec (${edgesTime.toFixed(2)} ms)`);
 
-            const totalLoadTime = nodesTime + edgesTime;
-            this.results[provider.name].ingest.totalLoadTimeMs = totalLoadTime;
-            console.log(`[${provider.name}] Total Load Time: ${totalLoadTime.toFixed(2)} ms`);
+                const totalLoadTime = nodesTime + edgesTime;
+                this.results[provider.name].ingest.totalLoadTimeMs = totalLoadTime;
+                console.log(`[${provider.name}] Total Load Time: ${totalLoadTime.toFixed(2)} ms`);
+            } catch (error) {
+                console.error(`[${provider.name}] Ingest failed: ${error.message}`);
+                this.results[provider.name].ingest.error = error.message;
+            }
         }
     }
 
@@ -63,76 +68,79 @@ class BenchmarkRunner {
             this.results[provider.name] = this.results[provider.name] || {};
             this.results[provider.name].queries = {};
 
-            // Cold-start measurement (before any warm-up)
-            console.log(`[${provider.name}] Measuring cold-start latencies...`);
-            let coldLatencies = [];
-            for (let i = 0; i < 10; i++) {
-                const { latencyMs } = await Timer.measure(() => provider.traversal(sampleNodes[i].id, 1));
-                coldLatencies.push(latencyMs);
-            }
-            this.results[provider.name].queries.coldStart1Hop = Stats.compute(coldLatencies);
-            console.log(`[${provider.name}] Cold 1-hop: p50 ${this.results[provider.name].queries.coldStart1Hop.p50}ms, p95 ${this.results[provider.name].queries.coldStart1Hop.p95}ms`);
-
-            // Warm-up
-            console.log(`[${provider.name}] Warming up...`);
-            for (let i = 0; i < 20; i++) {
-                await provider.traversal(sampleNodes[i % sampleNodes.length].id, 1);
-                await provider.pointLookup(sampleNodes[i % sampleNodes.length].id);
+            // Skip queries if ingest failed (no data to query)
+            if (this.results[provider.name].ingest?.error) {
+                console.log(`[${provider.name}] Skipping queries — ingest failed.`);
+                continue;
             }
 
-            // Traversal 1-hop
-            let latencies = [];
-            for (const node of sampleNodes) {
-                const { latencyMs } = await Timer.measure(() => provider.traversal(node.id, 1));
-                latencies.push(latencyMs);
-            }
-            this.results[provider.name].queries.traversal1Hop = Stats.compute(latencies);
-            console.log(`[${provider.name}] 1-hop: p50 ${this.results[provider.name].queries.traversal1Hop.p50}ms, p95 ${this.results[provider.name].queries.traversal1Hop.p95}ms`);
+            try {
+                // Cold-start measurement (before any warm-up)
+                console.log(`[${provider.name}] Measuring cold-start latencies...`);
+                let coldLatencies = [];
+                for (let i = 0; i < 10; i++) {
+                    try {
+                        const { latencyMs } = await Timer.measure(() => provider.traversal(sampleNodes[i].id, 1));
+                        coldLatencies.push(latencyMs);
+                    } catch (err) { /* skip failed iteration */ }
+                }
+                this.results[provider.name].queries.coldStart1Hop = Stats.compute(coldLatencies);
+                console.log(`[${provider.name}] Cold 1-hop: p50 ${this.results[provider.name].queries.coldStart1Hop.p50}ms, p95 ${this.results[provider.name].queries.coldStart1Hop.p95}ms`);
 
-            // Traversal 2-hop
-            latencies = [];
-            for (const node of sampleNodes) {
-                const { latencyMs } = await Timer.measure(() => provider.traversal(node.id, 2));
-                latencies.push(latencyMs);
-            }
-            this.results[provider.name].queries.traversal2Hop = Stats.compute(latencies);
-            console.log(`[${provider.name}] 2-hop: p50 ${this.results[provider.name].queries.traversal2Hop.p50}ms, p95 ${this.results[provider.name].queries.traversal2Hop.p95}ms`);
+                // Warm-up
+                console.log(`[${provider.name}] Warming up...`);
+                for (let i = 0; i < 20; i++) {
+                    try {
+                        await provider.traversal(sampleNodes[i % sampleNodes.length].id, 1);
+                        await provider.pointLookup(sampleNodes[i % sampleNodes.length].id);
+                    } catch (err) { /* ignore warm-up errors */ }
+                }
 
-            // Traversal 3-hop
-            latencies = [];
-            for (const node of sampleNodes) {
-                const { latencyMs } = await Timer.measure(() => provider.traversal(node.id, 3));
-                latencies.push(latencyMs);
-            }
-            this.results[provider.name].queries.traversal3Hop = Stats.compute(latencies);
-            console.log(`[${provider.name}] 3-hop: p50 ${this.results[provider.name].queries.traversal3Hop.p50}ms, p95 ${this.results[provider.name].queries.traversal3Hop.p95}ms`);
+                // Helper to run a benchmark workload with per-iteration error handling
+                const benchmarkWorkload = async (label, iterCount, fn) => {
+                    let latencies = [];
+                    let errors = 0;
+                    for (let i = 0; i < iterCount; i++) {
+                        try {
+                            const { latencyMs } = await Timer.measure(() => fn(i));
+                            latencies.push(latencyMs);
+                        } catch (err) {
+                            errors++;
+                        }
+                    }
+                    const stats = Stats.compute(latencies);
+                    stats.errors = errors;
+                    if (errors > 0) console.warn(`[${provider.name}] ${label}: ${errors}/${iterCount} queries failed`);
+                    return stats;
+                };
 
-            // Point Lookup
-            latencies = [];
-            for (const node of sampleNodes) {
-                const { latencyMs } = await Timer.measure(() => provider.pointLookup(node.id));
-                latencies.push(latencyMs);
-            }
-            this.results[provider.name].queries.pointLookup = Stats.compute(latencies);
-            console.log(`[${provider.name}] Point Lookup: p50 ${this.results[provider.name].queries.pointLookup.p50}ms`);
+                // Traversal 1-hop
+                this.results[provider.name].queries.traversal1Hop = await benchmarkWorkload('1-hop', runs, (i) => provider.traversal(sampleNodes[i].id, 1));
+                console.log(`[${provider.name}] 1-hop: p50 ${this.results[provider.name].queries.traversal1Hop.p50}ms, p95 ${this.results[provider.name].queries.traversal1Hop.p95}ms`);
 
-            // Indexed Lookup
-            latencies = [];
-            for (const node of sampleNodes) {
-                const { latencyMs } = await Timer.measure(() => provider.indexedLookup('nodeId', node.id));
-                latencies.push(latencyMs);
-            }
-            this.results[provider.name].queries.indexedLookup = Stats.compute(latencies);
-            console.log(`[${provider.name}] Indexed Lookup: p50 ${this.results[provider.name].queries.indexedLookup.p50}ms`);
+                // Traversal 2-hop
+                this.results[provider.name].queries.traversal2Hop = await benchmarkWorkload('2-hop', runs, (i) => provider.traversal(sampleNodes[i].id, 2));
+                console.log(`[${provider.name}] 2-hop: p50 ${this.results[provider.name].queries.traversal2Hop.p50}ms, p95 ${this.results[provider.name].queries.traversal2Hop.p95}ms`);
 
-            // Aggregation
-            latencies = [];
-            for (let i = 0; i < runs; i++) {
-                const { latencyMs } = await Timer.measure(() => provider.aggregation());
-                latencies.push(latencyMs);
+                // Traversal 3-hop
+                this.results[provider.name].queries.traversal3Hop = await benchmarkWorkload('3-hop', runs, (i) => provider.traversal(sampleNodes[i].id, 3));
+                console.log(`[${provider.name}] 3-hop: p50 ${this.results[provider.name].queries.traversal3Hop.p50}ms, p95 ${this.results[provider.name].queries.traversal3Hop.p95}ms`);
+
+                // Point Lookup
+                this.results[provider.name].queries.pointLookup = await benchmarkWorkload('Point Lookup', runs, (i) => provider.pointLookup(sampleNodes[i].id));
+                console.log(`[${provider.name}] Point Lookup: p50 ${this.results[provider.name].queries.pointLookup.p50}ms`);
+
+                // Indexed Lookup
+                this.results[provider.name].queries.indexedLookup = await benchmarkWorkload('Indexed Lookup', runs, (i) => provider.indexedLookup('nodeId', sampleNodes[i].id));
+                console.log(`[${provider.name}] Indexed Lookup: p50 ${this.results[provider.name].queries.indexedLookup.p50}ms`);
+
+                // Aggregation
+                this.results[provider.name].queries.aggregation = await benchmarkWorkload('Aggregation', runs, () => provider.aggregation());
+                console.log(`[${provider.name}] Aggregation: p50 ${this.results[provider.name].queries.aggregation.p50}ms, p95 ${this.results[provider.name].queries.aggregation.p95}ms`);
+            } catch (error) {
+                console.error(`[${provider.name}] Query benchmark failed: ${error.message}`);
+                this.results[provider.name].queries.error = error.message;
             }
-            this.results[provider.name].queries.aggregation = Stats.compute(latencies);
-            console.log(`[${provider.name}] Aggregation: p50 ${this.results[provider.name].queries.aggregation.p50}ms, p95 ${this.results[provider.name].queries.aggregation.p95}ms`);
         }
     }
 

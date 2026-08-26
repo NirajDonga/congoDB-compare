@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 const CognoDBProvider = require('./src/providers/CognoDBProvider');
-const Neo4jProvider = require('./src/providers/Neo4jProvider');
+const FalkorDBProvider = require('./src/providers/FalkorDBProvider');
 const MemgraphProvider = require('./src/providers/MemgraphProvider');
 const ArangoDBProvider = require('./src/providers/ArangoDBProvider');
 const SurrealDBProvider = require('./src/providers/SurrealDBProvider');
@@ -9,7 +9,7 @@ const SurrealDBProvider = require('./src/providers/SurrealDBProvider');
 async function main() {
     const providers = [
         new CognoDBProvider(process.env.COGNODB_URI, process.env.COGNODB_USER, process.env.COGNODB_PASSWORD),
-        new Neo4jProvider(process.env.NEO4J_URI, process.env.NEO4J_USER, process.env.NEO4J_PASSWORD),
+        new FalkorDBProvider(process.env.FALKORDB_URI),
         new MemgraphProvider(process.env.MEMGRAPH_URI, process.env.MEMGRAPH_USER, process.env.MEMGRAPH_PASSWORD),
         new ArangoDBProvider(process.env.ARANGODB_URI, process.env.ARANGODB_USER, process.env.ARANGODB_PASSWORD),
         new SurrealDBProvider(process.env.SURREALDB_URI, process.env.SURREALDB_USER, process.env.SURREALDB_PASSWORD)

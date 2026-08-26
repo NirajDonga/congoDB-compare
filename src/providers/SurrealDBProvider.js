@@ -18,6 +18,9 @@ class SurrealDBProvider extends BaseDatabase {
                 username: this.user,
                 password: this.password,
             });
+            // Create namespace and database if they don't exist
+            await this.db.query('DEFINE NAMESPACE IF NOT EXISTS benchmark');
+            await this.db.query('DEFINE DATABASE IF NOT EXISTS benchmark');
             await this.db.use({ namespace: 'benchmark', database: 'benchmark' });
             console.log(`[${this.name}] Connection established successfully!`);
         } catch (error) {

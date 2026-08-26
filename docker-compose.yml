@@ -1,12 +1,8 @@
-
 services:
-  neo4j:
-    image: neo4j:5
+  falkordb:
+    image: falkordb/falkordb:latest
     ports:
-      - "7687:7687" # Bolt port
-      - "7474:7474" # HTTP port
-    environment:
-      - NEO4J_AUTH=neo4j/testpassword
+      - "6379:6379" # Redis port
     deploy:
       resources:
         limits:
